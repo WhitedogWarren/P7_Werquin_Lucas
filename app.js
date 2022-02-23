@@ -29,14 +29,20 @@ dbConnexion.connect();
 app.use('/images', express.static(path.join(__dirname, 'images')));
 const authRoute = require('./routes/auth');
 const userRoute = require('./routes/user');
-const homeRoute = require('./routes/home');
+const userAdminRoute = require('./routes/userAdmin');
 const postRoute = require('./routes/posts');
+const postModeratorRoute = require('./routes/postsModerator');
 app.use('/api/auth', authRoute);
+
 app.use('/api/user', userRoute);
-app.use('/api/home', homeRoute);
+app.use('/api/user/admin', userAdminRoute);
+
 app.use('/api/posts', postRoute);
+app.use('/api/posts/moderator', postModeratorRoute);
 
 app.use('/', (req, res, next) => {
+    console.log('route demandée :');
+    console.log(req.originalUrl);
     res.status(200).json('Bonjour')
 })
 

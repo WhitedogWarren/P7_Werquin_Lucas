@@ -1,33 +1,43 @@
-const User = require('../models/user');
+const { Post, User } = require('../models');
 const fs = require('fs');
 
-exports.getMe = (req, res, next) => {
-    console.log('coucou from controllers/user');
-    //////
-    // TODO : récupérer l'id de l'utilisateur
-    //////
-    res.status(200).json({ message: 'coucou from controllers/user'});
-}
-
-exports.getUser = (req, res, next) => {
-    console.log('user demandé : ' + req.params.id);
-    User.findOne({ where: {id: req.params.id}})
+exports.getUser = (req, res) => {
+    User.findOne({ where: {id: req.params.id}, include: [Post]})
         .then(user => {
-            console.log(user.avatarUrl);
             let userInfo = {
+                id: user.id,
                 lastname: user.lastname,
                 firstname: user.firstname,
-                avatar: user.avatarUrl
+                avatar: user.avatarUrl,
+                bio: user.bio,
+                role: user.role,
+                posts: user.Posts
             }
             res.status(200).json({userInfo});
         })
+        .catch(error => {
+            console.log(error);
+            res.status(400).json({ message: 'une erreur est survenue'});
+        })
+}
+
+exports.getUserList = (req, res, next) => {
+    User.findAll()
+    .then((userList) => {
+        //console.log(userList);
+        res.status(200).json({userList});
+    })
+    .catch(error => {
+        console.log(error);
+        res.status(400).json({ message: 'une erreur est survenue'});
+    })
 }
 
 exports.updateUser = (req, res, next) => {
-    console.log('mise à jour d\'utilisateur demandée');
     User.findOne({ where: {id: req.auth.userId}}).then(user => {
         if(!user)
-            res.status(404).json({ error: new Error('Sauce non trouvée')});
+            return res.status(404).json({ error: new Error('Utilisateur non trouvé')});
+        
         function updateProcess() {
             const userObject = req.file ?
             {
@@ -42,26 +52,56 @@ exports.updateUser = (req, res, next) => {
             User.update(userObject, { where: {id:req.body.userId}})
                 .then(() => {
                     console.log('user mis à jour');
-                    res.status(200).json({
-                        userId: req.auth.userId,
-                        userLastName: userObject.lastname,
-                        userFirstName: userObject.firstname,
-                        userAvatar: req.file.filename
+                    User.findOne({where: {id: req.auth.userId}}).then(newUserData => {
+                        res.status(200).json({
+                            userId: newUserData.id,
+                            userLastName: newUserData.lastname,
+                            userFirstName: newUserData.firstname,
+                            userAvatar: newUserData.avatarUrl,
+                            userBio: newUserData.bio,
+                            userRole: newUserData.role
+                        })
                     })
                 })
                 .catch(err => {
                     res.status(400).json({ error: err.message});
             })
         }
-        if(user.dataValues.avatarUrl == 'defaultavatar.jpg')
-            updateProcess();
-        else {
+        
+
+
+        if(req.file && user.avatarUrl !== 'defaultavatar.jpg') {
             fs.unlink(`images/avatars/${user.avatarUrl}`, () => {
                 updateProcess();
             });
         }
+        else
+        updateProcess();
     })
     .catch(err => {
         res.status(400).json({ error: err.message});
+    })
+}
+
+exports.changeUserRole = (req, res, next) => {
+    console.log('chagement de rôle demandé');
+    console.log(req.body);
+    User.findOne({ where: {id: req.auth.userId}}).then((requester) => {
+        if(!requester) {
+            return res.status(404).json({ error: new Error('Utilisateur non trouvé')});
+        }
+
+        if(requester.role !== 'admin')
+            return res.status(400).json({ error: new Error('Requête non autorisée')});
+        
+        User.update({role: req.body.postedNewRole}, {where: {id: req.body.editedUser}}).then(() => {
+            console.log('user mis à jour');
+            res.status(200).json({ message: 'utilisateur mis à jour'});
+        }).catch(error => {
+            res.status(500).json({ error: new Error('Une erreur est survenue')});
+        })
+        
+    }).catch(error => {
+        res.status(500).json({ error: new Error('Une erreur est survenue')});
     })
 }

@@ -1,8 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('./connector');
 
-//sequelize.sync({alter:true, force:true });
-
 const User = sequelize.define('User', {
     lastname: {
         type: DataTypes.STRING,
@@ -26,6 +24,9 @@ const User = sequelize.define('User', {
     },
     bio: {
         type: DataTypes.TEXT
+    },
+    role: {
+        type: DataTypes.STRING
     }
 
 })

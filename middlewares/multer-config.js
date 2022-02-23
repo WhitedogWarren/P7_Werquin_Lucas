@@ -12,6 +12,7 @@ const MIME_TYPES = {
 const storage = multer.diskStorage({
     destination: (req, file, callback) => {
         console.log(`source : ${file.fieldname}`);
+        console.log(`name : ${file.originalname}`);
         fieldname = file.fieldname;
         callback(null, `images/${file.originalname.split('_')[0]}`);
         
@@ -23,5 +24,5 @@ const storage = multer.diskStorage({
     }
 });
 
-module.exports = multer({storage: storage}).single('avatar');
+module.exports = multer({storage: storage}).single('file');
 //file.fieldname contient le nom du champ de saisie, mais inaccessible ici
