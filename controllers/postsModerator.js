@@ -28,14 +28,20 @@ exports.getReportedPosts = (req, res) => {
 }
 
 exports.unreportPost = (req, res) => {
-    console.log('demande d\'annulation de signalement reçue');
-    console.log(req.body);
     Post.findOne({where: { id: req.body.postId}}).then(post => {
         if(!post)
             return res.status(404).json({ message: 'Post non trouvé.' });
         Post.update({reported: '[]'}, {where: { id: req.body.postId}}).then(() => {
             console.log('Post mis à jour');
-            return res.status(201).json({ message: 'Post mis à jour.' });
+            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+                delete post.User.dataValues.password;
+                post.reported = JSON.parse(post.reported);
+                res.status(201).json({ message: "Signalement annulé.", newPost: post});
+            }).catch(error => {
+                console.log('Erreur dans postModeratorCtrl.unreportPost :');
+                console.log(error);
+                res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page.'});
+            })
         }).catch(error => {
             console.log('Erreur dans postCtrl.unreportPost : ' + error);
             res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer'});
@@ -45,13 +51,21 @@ exports.unreportPost = (req, res) => {
 }
 
 exports.moderatePost = (req, res) => {
-    console.log('Modération de post demandée :');
-    //////
-    // TODO : contrôler reasonForModeration ( non nul )
-    //////
+    // contrôler reasonForModeration ( non nul )
+    if(req.body.reason == '')
+        return res.status(400).json({message: 'Vous devez indiquer un motif pour la modération'});
     Post.update({moderated: 1, reasonForModeration: req.body.reason, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
         console.log('Post mis à jour');
-        res.status(201).json({ message: 'Post mis à jour'});
+        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+            delete post.User.dataValues.password;
+            post.reported = JSON.parse(post.reported);
+            res.status(201).json({ message: 'Post mis à jour', newPost: post});
+        }).catch(error => {
+            console.log('Erreur dans postModeratorCtrl.moderatePost :');
+            console.log(error);
+            res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page.'});
+        })
+        
     }).catch(error => {
         console.log('error in postsModerator.js :\n' + error);
         res.status(500).json({ message: 'Erreur lors de la mise à jour. Veuillez réessayer'});
@@ -59,10 +73,18 @@ exports.moderatePost = (req, res) => {
 }
 
 exports.unmoderatePost = (req, res) => {
-    console.log('demande d\'annulation de la moderation du post n°' + req.body.postId);
     Post.update({moderated: 0, reasonForModeration: null, corrected: false, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
         console.log('Post mis à jour');
-        res.status(201).json({ message: 'Post mis à jour'});
+
+        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+            delete post.User.dataValues.password;
+            post.reported = JSON.parse(post.reported);
+            res.status(201).json({ message: 'Post mis à jour', newPost: post});
+        }).catch(error => {
+            console.log('Erreur dans postModeratorCtrl.moderatePost :');
+            console.log(error);
+            res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page.'});
+        })
     }).catch(error => {
         console.log('Error in postsModerator.js :\n' + error);
         res.status(500).json({ message: 'Erreur lors de la mise à jour. Veuillez réessayer'});

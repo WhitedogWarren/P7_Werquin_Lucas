@@ -4,8 +4,14 @@ const sequelize = require('./connector');
 
 const models = {};
 
-User.hasMany(Post);
-Post.belongsTo(User);
+User.hasMany(Post, {
+    foreignKey: 'UserId',
+    onDelete: 'cascade'
+});
+Post.belongsTo(User, {
+    foreignKey: 'UserId',
+    onDelete: 'cascade'
+});
 
 models.User = User;
 models.Post = Post;

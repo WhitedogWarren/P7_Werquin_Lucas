@@ -40,14 +40,10 @@ app.use('/api/user/admin', userAdminRoute);
 app.use('/api/posts', postRoute);
 app.use('/api/posts/moderator', postModeratorRoute);
 
-app.use('/', (req, res, next) => {
+app.use('/', (req, res) => {
     console.log('route demandée :');
     console.log(req.originalUrl);
-    res.status(200).json('Bonjour')
+    res.status(404).json({message: 'Aucune ressource ne correspond à votre demande'});
 })
-
-//////
-// TODO : 404 not found
-//////
 
 module.exports = app;
