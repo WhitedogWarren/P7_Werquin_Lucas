@@ -9,7 +9,7 @@ exports.getUser = (req, res) => {
                 id: user.id,
                 lastname: user.lastname,
                 firstname: user.firstname,
-                avatar: user.avatarUrl,
+                avatarUrl: user.avatarUrl,
                 bio: user.bio,
                 role: user.role,
                 posts: user.Posts
@@ -17,7 +17,7 @@ exports.getUser = (req, res) => {
             for(let post of user.Posts) {
                 post.reported = JSON.parse(post.reported);
             }
-            res.status(200).json({userInfo});
+            res.status(200).json(userInfo);
         })
         .catch(error => {
             console.log(error);
@@ -28,7 +28,11 @@ exports.getUser = (req, res) => {
 exports.getUserList = (req, res, next) => {
     User.findAll()
     .then((userList) => {
-        res.status(200).json({userList});
+        for(let user of userList) {
+            delete user.dataValues.email;
+            delete user.dataValues.password;
+        }
+        res.status(200).json(userList);
     })
     .catch(error => {
         console.log(error);
@@ -81,14 +85,7 @@ exports.updateUser = (req, res, next) => {
                 .then(() => {
                     console.log('user mis à jour');
                     User.findOne({where: {id: req.auth.userId}}).then(newUserData => {
-                        res.status(200).json({
-                            userId: newUserData.id,
-                            userLastName: newUserData.lastname,
-                            userFirstName: newUserData.firstname,
-                            userAvatar: newUserData.avatarUrl,
-                            userBio: newUserData.bio,
-                            userRole: newUserData.role
-                        })
+                        res.status(200).json(newUserData);
                     })
                 })
                 .catch(err => {
@@ -131,14 +128,15 @@ exports.updateUser = (req, res, next) => {
 }
 
 exports.deleteUser = (req, res) => {
-    console.log('suppression demandée par utilisateur n° ' + req.auth.userId);
+    if(!req.params.id || parseInt(req.params.id) !== req.auth.userId) {
+        return res.status(401).json({message : 'requête non autorisée'});
+    }
     User.findOne({where: {id: req.auth.userId}}).then(user => {
         if(!user)
             return res.status(404).json({message: 'Utilisateur non trouvé'});
         User.destroy({where: {id: req.auth.userId}}).then(() => {
-            console.log('utilisateur supprimé');
             Post.destroy({where: {UserId: req.auth.userId}});
-            res.status(201).json({message: 'Compte supprimé'});
+            res.status(201).json({message: 'Compte supprimé', newUser: null});
         }).catch(error => {
             console.log('Error in userCtrl.deleteUser : '+ error);
             res.status(500).json({message: 'Une erreur est survenue, veuillez réessayer'});

@@ -67,35 +67,55 @@ exports.getPostsShunk = (req, res) => {
     })
 }
 
-//inutilisé et à corriger !
 exports.getPostsFromUser = (req, res, next) => {
-    const posts = Post.findAll({where: {UserId: req.params.id}, include: [User]})
-    .then(data => {
-        console.log(data);
+    User.findOne({where: {id: req.auth.userId}}).then(user => {
+        Post.findAll({where: {UserId: req.params.id}, include: [User]}).then(data => {
+            for(let post of data) {
+                post.reported = JSON.parse(post.reported);
+                delete post.User.dataValues.password;
+                delete post.User.dataValues.email;
+            }
+            let filteredData = [];
+            for(let post of data) {
+                if(!(post.moderated && post.UserId !== req.auth.userId))
+                    filteredData.push(post);
+            }
+            if(user.role == 'user') {
+                res.status(200).json(filteredData);
+            }
+            else {
+                res.status(200).json(data);
+            }
+        })
+        .catch(error => {
+            console.log(error);
+        })
     })
-    .catch(error => {
-        console.log(error);
-    })
-    res.status(200).json({ message: 'demande de posts reçue par getPostsFromUser'});
 }
 
 exports.createPost = (req, res, next) => {
     if(!req.body.postedContent)
-        return res.status(500).json({ message: 'Le contenu est vide!' });
-
+        return res.status(500).json({ message: 'Le contenu est vide!', newPost: postObject });
 
     let postObject = {
         UserId: req.auth.userId,
         content: req.body.postedContent,
+        imageUrl: null
     }
     if(req.file) {
         postObject.imageUrl = req.file.filename;
     }
-    const post = Post.create(postObject).then(() => {
-        res.status(200).json({message: 'création de post effectuée'});
+    Post.create(postObject).then((newData) => {
+        Post.findOne({where: {id: newData.dataValues.id}, include: [User]}).then(newPostData => {
+            delete newPostData.User.dataValues.password;
+            delete newPostData.User.dataValues.email;
+            newPostData.reported = JSON.parse(newPostData.reported);
+            res.status(200).json({message: 'création de post effectuée', newPost: newPostData });
+        })
+        
     }).catch(error => {
         console.log('error in controller/posts.js : ' + error);
-        res.status(500).json({ message: 'Le post n\'a pas pu être créé'});
+        res.status(500).json({ message: 'Le post n\'a pas pu être créé', newPost: postObject });
     })
 }
 
@@ -103,13 +123,8 @@ exports.updatePost = (req, res, next) => {
     Post.findOne({ where: {id: req.body.postId}}).then(post => {
         if(!post)
             res.status(404).json({ error: new Error('post non trouvé')});
-
-        //////
-        // TODO : contrôle des champs
-        //////
         if(req.body.editedContent == '' || req.body.editedContent == undefined || req.body.editedContent == null)
             return res.status(400).json({message: 'Le contenu est vide!'});
-
         function updateProcess() {
             const postObject = req.file ?
             {
@@ -125,16 +140,17 @@ exports.updatePost = (req, res, next) => {
                 console.log('post mis à jour');
                 Post.findOne({where: {id: req.body.postId}, include: [User]}).then(post => {
                     delete post.User.dataValues.password;
+                    delete post.User.dataValues.email;
                     post.reported = JSON.parse(post.reported);
                     res.status(200).json({ message: "post mis à jour", newPost: post });
                 }).catch(error => {
                     console.log('Erreur dans postCtrl.updatePost :');
                     console.log(error);
-                    res.status(500).json({ message: 'Une erreur est survenue, veuillez rafraîchir la page' });
+                    res.status(500).json({ message: 'Une erreur est survenue, veuillez rafraîchir la page', newPost: null });
                 })
             }).catch(err => {
                 console.log('error in postCtrl.updatePost : ' + err);
-                res.status(400).json({ message: 'Une erreur est survenue, veuillez réessayer'});
+                res.status(400).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
             });
         }
         if(req.file || req.body.deleteImage) {
@@ -146,16 +162,16 @@ exports.updatePost = (req, res, next) => {
             updateProcess();
     }).catch(err => {
         console.log('error in postCtrl.updatePost : ' + err);
-        res.status(400).json({ message: 'Une erreur est survenue, veuillez réessayer'});
+        res.status(400).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
     })
 }
 
 exports.deletePost = (req, res, next) => {
     Post.destroy({where: {id: req.params.id}}).then(() => {
-        res.status(200).json({ message: 'suppression de post effectuée'});
+        res.status(200).json({ message: 'suppression de post effectuée', newPost: null});
     }).catch(error => {
         console.log('Error in controller/posts.js : ' + error);
-        res.status(500).json({ error: error});
+        res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
     })
 }
 
@@ -256,6 +272,9 @@ exports.likePost = (req, res) => {
             console.log('Post non trouvé.');
             return res.status(404).json({ message: 'Post non trouvé.' });
         }
+        if(req.body.userId == req.body.postId) {
+            return res.status(401).json({message: "vous ne pouvez pas réagir à vos propres posts"});
+        }
         let likeArray = JSON.parse(post.liked);
         let loveArray = JSON.parse(post.loved);
         let laughArray = JSON.parse(post.laughed);
@@ -318,6 +337,9 @@ exports.lovePost = (req, res) => {
         if(!post) {
             console.log('Post non trouvé');
             return res.status(404).json({ message: 'Post non trouvé'});
+        }
+        if(req.body.userId == req.body.postId) {
+            return res.status(401).json({message: "vous ne pouvez pas réagir à vos propres posts"});
         }
         let likeArray = JSON.parse(post.liked);
         let loveArray = JSON.parse(post.loved);
@@ -384,6 +406,9 @@ exports.laughPost = (req, res) => {
             console.log('Post non trouvé');
             return res.status(404).json({ message: 'Post non trouvé'});
         }
+        if(req.body.userId == req.body.postId) {
+            return res.status(401).json({message: "vous ne pouvez pas réagir à vos propres posts"});
+        }
         let likeArray = JSON.parse(post.liked);
         let loveArray = JSON.parse(post.loved);
         let laughArray = JSON.parse(post.laughed);
@@ -449,6 +474,9 @@ exports.angerPost = (req, res) => {
         if(!post) {
             console.log('Post non trouvé');
             return res.status(404).json({ message: 'Post non trouvé'});
+        }
+        if(req.body.userId == req.body.postId) {
+            return res.status(401).json({message: "vous ne pouvez pas réagir à vos propres posts"});
         }
         let likeArray = JSON.parse(post.liked);
         let loveArray = JSON.parse(post.loved);

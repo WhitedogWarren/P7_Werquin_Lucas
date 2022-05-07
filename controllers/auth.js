@@ -69,15 +69,18 @@ exports.login = (req, res, next) => {
                         return;
                     }
                     res.status(200).json({
-                        id: userData.id,
-                        lastname: userData.lastname,
-                        firstname: userData.firstname,
-                        avatarUrl: userData.avatarUrl,
-                        bio: userData.bio,
-                        //Posts: userData.Posts,
-                        role: userData.role,
-                        createdAt: userData.createdAt,
-                        updatedAt: userData.updatedAt,
+                        message: 'connexion réussie',
+                        newUser: {
+                            id: userData.id,
+                            lastname: userData.lastname,
+                            firstname: userData.firstname,
+                            avatarUrl: userData.avatarUrl,
+                            bio: userData.bio,
+                            //Posts: userData.Posts,
+                            role: userData.role,
+                            createdAt: userData.createdAt,
+                            updatedAt: userData.updatedAt
+                        },
                         token: jwt.sign(
                             { userId: userData.id },
                             process.env.TOKEN_SECRET,
