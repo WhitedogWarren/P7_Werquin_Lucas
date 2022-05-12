@@ -1,5 +1,21 @@
-const { Post, User } = require('../models');
+const { Post, User, Comment } = require('../models');
 const fs = require('fs');
+
+const defaultInclude = [
+    {
+        model: User,
+        attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+    },
+    {
+        model: Comment,
+        include: [
+            {
+                model: User,
+                attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+            }
+        ]
+    }
+];
 
 exports.getAllPosts = (req, res, next) => {
     User.findOne({where: {id: req.auth.userId}}).then(user => {
@@ -38,11 +54,32 @@ exports.getAllPosts = (req, res, next) => {
 exports.getPostsShunk = (req, res) => {
     //console.log(req.params.postId);
     User.findOne({where: {id: req.auth.userId}}).then(user => {
-        Post.findAll({offset: (req.params.postId -0), limit: 10, order: [['id', 'DESC']], include: [User]}).then(data => {
+        Post.findAll({
+            offset: (req.params.postId -0),
+            limit: 10,
+            order: [['id', 'DESC']],
+            include: [
+                { 
+                    model: User,
+                    attributes: ['id', 'firstname', 'lastName', 'avatarUrl']
+                },
+                {
+                    model: Comment,
+                    include: [
+                        {
+                            model: User,
+                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                        }
+                    ]
+                }
+            ]
+        })
+        .then(data => {
             for(let post of data) {
                 post.reported = JSON.parse(post.reported);
-                delete post.User.dataValues.password;
-                delete post.User.dataValues.email;
+                //delete post.User.dataValues.password;
+                //delete post.User.dataValues.email;
+                post.Comments = post.Comments.reverse();
             }
             let filteredData = [];
             for(let post of data) {
@@ -69,11 +106,29 @@ exports.getPostsShunk = (req, res) => {
 
 exports.getPostsFromUser = (req, res, next) => {
     User.findOne({where: {id: req.auth.userId}}).then(user => {
-        Post.findAll({where: {UserId: req.params.id}, include: [User]}).then(data => {
+        Post.findAll({
+            where: {UserId: req.params.id},
+            include: [
+                {
+                    model: User,
+                    attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                },
+                {
+                    model: Comment,
+                    include: [
+                        {
+                            model: User,
+                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                        }
+                    ]
+                }
+            ]
+        })
+        .then(data => {
             for(let post of data) {
                 post.reported = JSON.parse(post.reported);
-                delete post.User.dataValues.password;
-                delete post.User.dataValues.email;
+                //delete post.User.dataValues.password;
+                //delete post.User.dataValues.email;
             }
             let filteredData = [];
             for(let post of data) {
@@ -94,8 +149,8 @@ exports.getPostsFromUser = (req, res, next) => {
 }
 
 exports.createPost = (req, res, next) => {
-    if(!req.body.postedContent)
-        return res.status(500).json({ message: 'Le contenu est vide!', newPost: postObject });
+    if(!req.body.postedContent && !req.file)
+        return res.status(400).json({ message: 'Le contenu est vide!', newPost: null });
 
     let postObject = {
         UserId: req.auth.userId,
@@ -106,13 +161,16 @@ exports.createPost = (req, res, next) => {
         postObject.imageUrl = req.file.filename;
     }
     Post.create(postObject).then((newData) => {
-        Post.findOne({where: {id: newData.dataValues.id}, include: [User]}).then(newPostData => {
-            delete newPostData.User.dataValues.password;
-            delete newPostData.User.dataValues.email;
+        Post.findOne({
+            where: {
+                id: newData.dataValues.id},
+                include: defaultInclude
+        })
+        .then(newPostData => {
+            console.log(newPostData.dataValues);
             newPostData.reported = JSON.parse(newPostData.reported);
             res.status(200).json({message: 'création de post effectuée', newPost: newPostData });
         })
-        
     }).catch(error => {
         console.log('error in controller/posts.js : ' + error);
         res.status(500).json({ message: 'Le post n\'a pas pu être créé', newPost: postObject });
@@ -123,7 +181,7 @@ exports.updatePost = (req, res, next) => {
     Post.findOne({ where: {id: req.body.postId}}).then(post => {
         if(!post)
             res.status(404).json({ error: new Error('post non trouvé')});
-        if(req.body.editedContent == '' || req.body.editedContent == undefined || req.body.editedContent == null)
+        if((req.body.editedContent == '' || req.body.editedContent == undefined || req.body.editedContent == null) && (!req.file && !post.imageUrl))
             return res.status(400).json({message: 'Le contenu est vide!'});
         function updateProcess() {
             const postObject = req.file ?
@@ -138,9 +196,13 @@ exports.updatePost = (req, res, next) => {
                 postObject.imageUrl = null;
             Post.update(postObject, { where: {id: req.body.postId}}).then(() => {
                 console.log('post mis à jour');
-                Post.findOne({where: {id: req.body.postId}, include: [User]}).then(post => {
-                    delete post.User.dataValues.password;
-                    delete post.User.dataValues.email;
+                Post.findOne({
+                    where: {id: req.body.postId},
+                    include: defaultInclude
+                })
+                .then(post => {
+                    //delete post.User.dataValues.password;
+                    //delete post.User.dataValues.email;
                     post.reported = JSON.parse(post.reported);
                     res.status(200).json({ message: "post mis à jour", newPost: post });
                 }).catch(error => {
@@ -185,7 +247,11 @@ exports.reportPost = (req, res) => {
         }
         reportArray.push(req.body.userId);
         Post.update({reported: JSON.stringify(reportArray)}, { where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
                 delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Signalement enregistré.", newPost: post});
@@ -212,7 +278,11 @@ exports.unreportPost = (req, res) => {
         }
         reportArray.splice(reportArray.indexOf(req.body.userId), 1);
         Post.update({reported: JSON.stringify(reportArray)}, {where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
                 delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Signalement annulé.", newPost: post});
@@ -234,8 +304,12 @@ exports.unreportPost = (req, res) => {
 exports.notifyCorrection = (req, res) => {
     Post.update({corrected: true}, {where: {id: req.body.postId}}).then(() => {
         console.log('Post mis à jour');
-        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-            delete post.User.dataValues.password;
+        Post.findOne({
+            where: { id: req.body.postId},
+            include: defaultInclude
+        })
+        .then(post => {
+            //delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: "Notification de correction reçue.", newPost: post});
         }).catch(error => {
@@ -251,8 +325,12 @@ exports.notifyCorrection = (req, res) => {
 
 exports.avoidCorrection = (req, res) => {
     Post.update({corrected: false}, {where: {id: req.body.postId}}).then(() => {
-        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-            delete post.User.dataValues.password;
+        Post.findOne({
+            where: { id: req.body.postId},
+            include: defaultInclude
+        })
+        .then(post => {
+            //delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: "demande d\'annulation de correction reçue.", newPost: post});
         }).catch(error => {
@@ -284,8 +362,12 @@ exports.likePost = (req, res) => {
         }
         likeArray.push(req.body.userId);
         Post.update({liked: JSON.stringify(likeArray)}, {where: {id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -313,8 +395,12 @@ exports.unlikePost = (req, res) => {
             return res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer'});
         likeArray.splice(likeArray.indexOf(req.body.userId, 1));
         Post.update({liked: JSON.stringify(likeArray)}, {where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -350,8 +436,12 @@ exports.lovePost = (req, res) => {
         }
         loveArray.push(req.body.userId);
         Post.update({loved: JSON.stringify(loveArray)}, {where: {id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -381,8 +471,12 @@ exports.unlovePost = (req, res) => {
         }
         loveArray.splice(loveArray.indexOf(req.body.userId), 1);
         Post.update({ loved: JSON.stringify(loveArray)}, { where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -418,8 +512,12 @@ exports.laughPost = (req, res) => {
         }
         laughArray.push(req.body.userId);
         Post.update({laughed: JSON.stringify(laughArray)}, {where: {id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -450,8 +548,12 @@ exports.unlaughPost = (req, res) => {
         }
         laughArray.splice(laughArray.indexOf(req.body.userId), 1);
         Post.update({ laughed: JSON.stringify(laughArray)}, { where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -487,8 +589,12 @@ exports.angerPost = (req, res) => {
         }
         angerArray.push(req.body.userId);
         Post.update({angered: JSON.stringify(angerArray)}, {where: {id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {
@@ -519,8 +625,12 @@ exports.unangerPost = (req, res) => {
         }
         angerArray.splice(angerArray.indexOf(req.body.userId), 1);
         Post.update({ angered: JSON.stringify(angerArray)}, { where: { id: req.body.postId}}).then(() => {
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
-                delete post.User.dataValues.password;
+            Post.findOne({
+                where: { id: req.body.postId},
+                include: defaultInclude
+            })
+            .then(post => {
+                //delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Post mis à jour", newPost: post});
             }).catch(error => {

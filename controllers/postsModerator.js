@@ -1,8 +1,42 @@
-const { Post, User } = require('../models');
+const { Post, User, Comment } = require('../models');
 const { Op } = require('sequelize');
 
+const defaultInclude = [
+    {
+        model: User,
+        attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+    },
+    {
+        model: Comment,
+        include: [
+            {
+                model: User,
+                attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+            }
+        ]
+    }
+];
+
 exports.getModeratedPosts = (req, res) => {
-    Post.findAll({where: {moderated: true}, include: [User]}).then(data => {
+    Post.findAll({
+        where: {moderated: true},
+        include: [
+            {
+                model: User,
+                attributes: ['id', 'firstname', 'lastName', 'avatarUrl']
+            },
+            {
+                model: Comment,
+                    include: [
+                        {
+                            model: User,
+                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                        }
+                    ]
+            }
+        ]
+    })
+    .then(data => {
         for(let post of data) {
             delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
@@ -15,7 +49,25 @@ exports.getModeratedPosts = (req, res) => {
 }
 
 exports.getReportedPosts = (req, res) => {
-    Post.findAll({ where: { reported: { [Op.ne]: '[]' }}, include: [User]}).then(data => {
+    Post.findAll({
+        where: { reported: { [Op.ne]: '[]' }},
+        include: [
+            {
+                model: User,
+                attributes: ['id', 'firstname', 'lastName', 'avatarUrl']
+            },
+            {
+                model: Comment,
+                    include: [
+                        {
+                            model: User,
+                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                        }
+                    ]
+            }
+        ]
+    })
+    .then(data => {
         for(let post of data) {
             delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
@@ -33,7 +85,8 @@ exports.unreportPost = (req, res) => {
             return res.status(404).json({ message: 'Post non trouvé.' });
         Post.update({reported: '[]'}, {where: { id: req.body.postId}}).then(() => {
             console.log('Post mis à jour');
-            Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+            Post.findOne({where: { id: req.body.postId}, include: defaultInclude})
+            .then(post => {
                 delete post.User.dataValues.password;
                 post.reported = JSON.parse(post.reported);
                 res.status(201).json({ message: "Signalement annulé.", newPost: post});
@@ -56,7 +109,7 @@ exports.moderatePost = (req, res) => {
         return res.status(400).json({message: 'Vous devez indiquer un motif pour la modération'});
     Post.update({moderated: 1, reasonForModeration: req.body.reason, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
         console.log('Post mis à jour');
-        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+        Post.findOne({where: { id: req.body.postId}, include: defaultInclude}).then(post => {
             delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: 'Post mis à jour', newPost: post});
@@ -74,9 +127,7 @@ exports.moderatePost = (req, res) => {
 
 exports.unmoderatePost = (req, res) => {
     Post.update({moderated: 0, reasonForModeration: null, corrected: false, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
-        console.log('Post mis à jour');
-
-        Post.findOne({where: { id: req.body.postId}, include: [User]}).then(post => {
+        Post.findOne({where: { id: req.body.postId}, include: defaultInclude}).then(post => {
             delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: 'Post mis à jour', newPost: post});
@@ -90,4 +141,3 @@ exports.unmoderatePost = (req, res) => {
         res.status(500).json({ message: 'Erreur lors de la mise à jour. Veuillez réessayer'});
     })
 }
-

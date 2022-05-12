@@ -1,28 +1,54 @@
-const { Post, User } = require('../models');
+const { Post, User, Comment } = require('../models');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 
 exports.getUser = (req, res) => {
-    User.findOne({ where: {id: req.params.id}, include: [Post]})
-        .then(user => {
-            let userInfo = {
-                id: user.id,
-                lastname: user.lastname,
-                firstname: user.firstname,
-                avatarUrl: user.avatarUrl,
-                bio: user.bio,
-                role: user.role,
-                posts: user.Posts
+    User.findOne({ 
+        where: {id: req.params.id},
+        include: [
+            {
+                model: Post,
+                include: [
+                    {
+                        model: Comment, include: [{model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}]
+                    }
+                ]
+            },
+            {
+                model: Comment,
+                include: [
+                    /*
+                    {
+                        model: User, attributes: ['lastname', 'firstname', 'avatarUrl']
+                    },
+                    */
+                    {
+                        model: Post, include: [{model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}]
+                    }
+                ]
             }
-            for(let post of user.Posts) {
-                post.reported = JSON.parse(post.reported);
-            }
-            res.status(200).json(userInfo);
-        })
-        .catch(error => {
-            console.log(error);
-            res.status(400).json({ message: 'une erreur est survenue'});
-        })
+        ]
+    })
+    .then(user => {
+        let userInfo = {
+            id: user.id,
+            lastname: user.lastname,
+            firstname: user.firstname,
+            avatarUrl: user.avatarUrl,
+            bio: user.bio,
+            role: user.role,
+            posts: user.Posts,
+            comments: user.Comments
+        }
+        for(let post of user.Posts) {
+            post.reported = JSON.parse(post.reported);
+        }
+        res.status(200).json(userInfo);
+    })
+    .catch(error => {
+        console.log(error);
+        res.status(400).json({ message: 'une erreur est survenue'});
+    })
 }
 
 exports.getUserList = (req, res, next) => {

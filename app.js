@@ -32,6 +32,8 @@ const userRoute = require('./routes/user');
 const userAdminRoute = require('./routes/userAdmin');
 const postRoute = require('./routes/posts');
 const postModeratorRoute = require('./routes/postsModerator');
+const commentRoute = require('./routes/comment');
+
 app.use('/api/auth', authRoute);
 
 app.use('/api/user', userRoute);
@@ -39,6 +41,8 @@ app.use('/api/user/admin', userAdminRoute);
 
 app.use('/api/posts', postRoute);
 app.use('/api/posts/moderator', postModeratorRoute);
+
+app.use('/api/comment', commentRoute);
 
 app.use('/', (req, res) => {
     console.log('route demandée :');
