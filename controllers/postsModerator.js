@@ -17,6 +17,7 @@ const defaultInclude = [
     }
 ];
 
+//sends all posts marked as 'moderated'
 exports.getModeratedPosts = (req, res) => {
     Post.findAll({
         where: {moderated: true},
@@ -38,7 +39,6 @@ exports.getModeratedPosts = (req, res) => {
     })
     .then(data => {
         for(let post of data) {
-            delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
         }
         res.status(200).json(data);
@@ -48,6 +48,7 @@ exports.getModeratedPosts = (req, res) => {
     })
 }
 
+//sends all posts marked as 'reported'
 exports.getReportedPosts = (req, res) => {
     Post.findAll({
         where: { reported: { [Op.ne]: '[]' }},
@@ -69,7 +70,6 @@ exports.getReportedPosts = (req, res) => {
     })
     .then(data => {
         for(let post of data) {
-            delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
         }
         res.status(200).json(data);
@@ -79,6 +79,7 @@ exports.getReportedPosts = (req, res) => {
     })
 }
 
+//clears the list of users who have reported the post
 exports.unreportPost = (req, res) => {
     Post.findOne({where: { id: req.body.postId}}).then(post => {
         if(!post)
@@ -100,35 +101,33 @@ exports.unreportPost = (req, res) => {
             res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer'});
         })
     });
-    
 }
 
+//sets the given post ( req.body.postId ) as 'moderated', sets the reason for moderation ( reasonForModeration property ) and clears the list of users who have reported the post
 exports.moderatePost = (req, res) => {
-    // contrôler reasonForModeration ( non nul )
-    if(req.body.reason == '')
+    // control req.body.reason ( musn't be null or undefined or )
+    if(!req.body.reason)
         return res.status(400).json({message: 'Vous devez indiquer un motif pour la modération'});
     Post.update({moderated: 1, reasonForModeration: req.body.reason, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
         console.log('Post mis à jour');
         Post.findOne({where: { id: req.body.postId}, include: defaultInclude}).then(post => {
-            delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: 'Post mis à jour', newPost: post});
         }).catch(error => {
             console.log('Erreur dans postModeratorCtrl.moderatePost :');
             console.log(error);
-            res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page.'});
+            res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page.', newPost: null});
         })
-        
     }).catch(error => {
         console.log('error in postsModerator.js :\n' + error);
-        res.status(500).json({ message: 'Erreur lors de la mise à jour. Veuillez réessayer'});
+        res.status(500).json({ message: 'Erreur lors de la mise à jour. Veuillez réessayer', newPost: null});
     })
 }
 
+//unsets the given post ( req.body.postId ) as 'moderated', clears the reasonForModeration, corrected and reported properties
 exports.unmoderatePost = (req, res) => {
     Post.update({moderated: 0, reasonForModeration: null, corrected: false, reported: '[]'}, {where: {id: req.body.postId}}).then(() => {
         Post.findOne({where: { id: req.body.postId}, include: defaultInclude}).then(post => {
-            delete post.User.dataValues.password;
             post.reported = JSON.parse(post.reported);
             res.status(201).json({ message: 'Post mis à jour', newPost: post});
         }).catch(error => {

@@ -10,20 +10,21 @@ exports.getUser = (req, res) => {
                 model: Post,
                 include: [
                     {
-                        model: Comment, include: [{model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}]
+                        model: Comment,
+                        include: [
+                            {model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}
+                        ]
                     }
                 ]
             },
             {
                 model: Comment,
                 include: [
-                    /*
                     {
-                        model: User, attributes: ['lastname', 'firstname', 'avatarUrl']
-                    },
-                    */
-                    {
-                        model: Post, include: [{model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}]
+                        model: Post,
+                        include: [
+                            {model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}
+                        ]
                     }
                 ]
             }
@@ -52,12 +53,10 @@ exports.getUser = (req, res) => {
 }
 
 exports.getUserList = (req, res, next) => {
-    User.findAll()
+    User.findAll({
+        attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+    })
     .then((userList) => {
-        for(let user of userList) {
-            delete user.dataValues.email;
-            delete user.dataValues.password;
-        }
         res.status(200).json(userList);
     })
     .catch(error => {
@@ -68,7 +67,7 @@ exports.getUserList = (req, res, next) => {
 
 exports.updateUser = (req, res, next) => {
     //////
-    // contrôle des champs vides
+    // check for empty fields. Add them in an emptyFields array if any
     //////
     let emptyFields = false;
     let invalidFields = false;
@@ -77,7 +76,7 @@ exports.updateUser = (req, res, next) => {
     if(req.body.firstname == '' || req.body.lastname == undefined || req.body.lastname == null)
         emptyFields ? emptyFields.push('firstname') : emptyFields = ['firstname'];
     //////
-    // contrôle des champs invalides
+    // check for invalid fields. Add them in an invalidFields array if any
     //////
     const nameRegexp = /[a-zA-ZàáâäãåąčćęèéêëėįìíîïłńòóôöõøùúûüųūÿýżźñçčšžÀÁÂÄÃÅĄĆČĖĘÈÉÊËÌÍÎÏĮŁŃÒÓÔÖÕØÙÚÛÜŲŪŸÝŻŹÑßÇŒÆČŠŽ∂ð.' -]+$/u;
     if(req.body.lastname !== '' && !nameRegexp.test(req.body.lastname))
@@ -86,13 +85,21 @@ exports.updateUser = (req, res, next) => {
         invalidFields ? invalidFields.push('firstname') : invalidFields = ['firstname'];
 
     if(emptyFields || invalidFields) {
-        return res.status(401).json({message : {emptyFields, invalidFields}});
+        return res.status(401).json({message : {emptyFields, invalidFields}, newUser: null});
     }
-    
     let newPassword = false;
     User.findOne({ where: {id: req.auth.userId}}).then(user => {
-        if(!user)
-            return res.status(404).json({ error: new Error('Utilisateur non trouvé')});
+        if(!user) {
+            return res.status(404).json({message: 'utilisateur non trouvé', newUser: null});
+        }
+        if(req.auth.userId !== user.id) {
+            return res.status(401).json({message: 'requête non autorisée', newUser: null})
+        }
+        //////
+        // - at first, check if a new password is submitted ( then controls the actual password, and if new password and its confirmation are equal )
+        // - then, manage file for avatar
+        // - finally, update
+        //////
         function updateProcess() {
             const userObject = req.file ?
             {
@@ -128,7 +135,7 @@ exports.updateUser = (req, res, next) => {
             updateProcess();
         }
         //////
-        // traitement de la demande de nouveau mot de passe
+        // check if a new password is asked, and then procced to file management and update proccess
         //////
         if(req.body.postedCurrentPassword) {
             bcrypt.compare(req.body.postedCurrentPassword, user.password).then(valid => {
@@ -161,7 +168,7 @@ exports.deleteUser = (req, res) => {
         if(!user)
             return res.status(404).json({message: 'Utilisateur non trouvé'});
         User.destroy({where: {id: req.auth.userId}}).then(() => {
-            Post.destroy({where: {UserId: req.auth.userId}});
+            //Post.destroy({where: {UserId: req.auth.userId}});
             res.status(201).json({message: 'Compte supprimé', newUser: null});
         }).catch(error => {
             console.log('Error in userCtrl.deleteUser : '+ error);
