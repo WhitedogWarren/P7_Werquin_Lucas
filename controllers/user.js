@@ -54,7 +54,7 @@ exports.getUser = (req, res) => {
 
 exports.getUserList = (req, res, next) => {
     User.findAll({
-        attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+        attributes: ['id', 'firstname', 'lastname', 'avatarUrl', 'role']
     })
     .then((userList) => {
         res.status(200).json(userList);

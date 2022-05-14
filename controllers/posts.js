@@ -29,7 +29,7 @@ exports.getPostsShunk = (req, res) => {
             include: [
                 { 
                     model: User,
-                    attributes: ['id', 'firstname', 'lastName', 'avatarUrl']
+                    attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
                 },
                 {
                     model: Comment,
