@@ -12,7 +12,7 @@ exports.getUser = (req, res) => {
                     {
                         model: Comment,
                         include: [
-                            {model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}
+                            {model: User, attributes: ['id', 'firstname', 'lastname', 'avatarUrl']}
                         ]
                     }
                 ]
@@ -23,7 +23,12 @@ exports.getUser = (req, res) => {
                     {
                         model: Post,
                         include: [
-                            {model: User, attributes: ['firstname', 'lastname', 'avatarUrl']}
+                            {model: User, attributes: ['id', 'firstname', 'lastname', 'avatarUrl']},
+                            {
+                                model: Comment,
+                                include: [{model: User, attributes: ['id', 'firstname', 'lastname', 'avatarUrl']}]
+                            }
+
                         ]
                     }
                 ]
@@ -43,6 +48,9 @@ exports.getUser = (req, res) => {
         }
         for(let post of user.Posts) {
             post.reported = JSON.parse(post.reported);
+        }
+        for(let comment of user.Comments) {
+            comment.Post.reported = JSON.parse(comment.Post.reported);
         }
         res.status(200).json(userInfo);
     })
