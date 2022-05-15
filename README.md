@@ -25,5 +25,4 @@ node server
 
 Admin logs:
 email: 'admin@groupomania.com'
-
 password: 'Whitedog44'
