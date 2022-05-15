@@ -67,14 +67,10 @@ module.exports = {
       createdAt: {
         allowNull: false,
         type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: '[]'
       },
       updatedAt: {
         allowNull: false,
         type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: '[]'
       }
     });
   },
