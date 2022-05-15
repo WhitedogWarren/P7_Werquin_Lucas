@@ -1,0 +1,23 @@
+{
+  "development": {
+    "username": "groupomania",
+    "password": "Whitedog+44",
+    "database": "groupomania",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "test": {
+    "username": "groupomania",
+    "password": "Whitedog+44",
+    "database": "groupomania",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "production": {
+    "username": "groupomania",
+    "password": "Whitedog+44",
+    "database": "groupomania",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  }
+}
