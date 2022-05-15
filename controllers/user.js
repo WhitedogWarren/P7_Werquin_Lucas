@@ -117,10 +117,13 @@ exports.updateUser = (req, res, next) => {
                 bio: req.body.bio
             } :
             {
-                ...req.body
+                lastname: req.body.lastname,
+                firstname: req.body.firstname,
+                bio: req.body.bio
             };
-            delete userObject.userId;
-            if(newPassword)
+            if(newPassword) {
+                userObject.password = newPassword;
+            }
                 userObject.password = newPassword;
             User.update(userObject, { where: {id:req.body.userId}})
                 .then(() => {
