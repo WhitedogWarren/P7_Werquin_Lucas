@@ -4,14 +4,14 @@ const fs = require('fs');
 const defaultInclude = [
     {
         model: User,
-        attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+        attributes: ['id', 'firstname', 'lastname', 'avatarUrl', 'role']
     },
     {
         model: Comment,
         include: [
             {
                 model: User,
-                attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                attributes: ['id', 'firstname', 'lastname', 'avatarUrl', 'role']
             }
         ]
     }
@@ -29,14 +29,14 @@ exports.getPostsShunk = (req, res) => {
             include: [
                 { 
                     model: User,
-                    attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                    attributes: ['id', 'firstname', 'lastname', 'avatarUrl', 'role']
                 },
                 {
                     model: Comment,
                     include: [
                         {
                             model: User,
-                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl']
+                            attributes: ['id', 'firstname', 'lastname', 'avatarUrl', 'role']
                         }
                     ]
                 }
@@ -209,6 +209,11 @@ exports.deletePost = (req, res, next) => {
             return res.status(401).json({message: 'requête non autorisée', newPost: null});
         }
         Post.destroy({where: {id: req.params.id}}).then(() => {
+            if(post.imageUrl) {
+                fs.unlink(`images/postImage/${post.imageUrl}`, () => {
+                    console.log(`image ${post.imageUrl} supprimée`)
+                });
+            }
             res.status(200).json({ message: 'suppression de post effectuée', newPost: null});
         }).catch(error => {
             console.log('Error in controller/posts.js : ' + error);
@@ -222,7 +227,9 @@ exports.reportPost = (req, res) => {
     Post.findOne({where: { id: req.body.postId}}).then(post => {
         if(!post)
             return res.status(404).json({message: 'Post non trouvé.'});
-        if( req.auth.userId !== post.UserId ) {
+        console.log('post.UserId : ' + post.UserId);
+        console.log(`req.auth.userId : ${req.auth.userId}`);
+        if( req.auth.userId == post.UserId ) {
             return res.status(401).json({message: 'requête non autorisée', newPost: null});
         }
         let reportArray = JSON.parse(post.reported);
@@ -259,9 +266,6 @@ exports.unreportPost = (req, res) => {
     Post.findOne({where: {id: req.body.postId}}).then(post => {
         if(!post)
             return res.status(404).json({message: 'Post non trouvé.'});
-        if( req.auth.userId !== post.UserId ) {
-            return res.status(401).json({message: 'requête non autorisée', newPost: null});
-        }
         let reportArray = JSON.parse(post.reported);
         if(!reportArray.includes(req.body.userId)) {
             return res.status(401).json({ message: 'Vous n\'avez pas signalé ce post'});
@@ -291,36 +295,35 @@ exports.unreportPost = (req, res) => {
 }
 
 //sets the given post ( req.body.postId ) as 'corrected' by its author
-exports.notifyCorrection = (req, res) => {
-    Post.findOne({where: {id: req.body.postId}}).then(post => {
-        if(!post) {
-            return res.status(404).json({ message: 'post non trouvé', newPost: null})
-        }
-        if( req.auth.userId !== post.userId ) {
-            return res.status(401).json({message: 'requête non autorisée', newPost: null});
-        }
-        Post.update({corrected: true}, {where: {id: req.body.postId}}).then(() => {
-            console.log('Post mis à jour');
-            Post.findOne({
-                where: { id: req.body.postId},
-                include: defaultInclude
-            })
-            .then(post => {
-                post.reported = JSON.parse(post.reported);
-                res.status(201).json({ message: "Notification de correction reçue.", newPost: post});
-            }).catch(error => {
-                console.log('Erreur dans postCtrl.notifyCorrection :');
-                console.log(error);
-                res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page., newPost: null'});
-            })
-        }).catch(error => {
-            console.log('Error in posts.js/notifyCorrection : ' + error);
-            res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
-        })
-    }).catch(error => {
+exports.notifyCorrection = async (req, res) => {
+    const postToUpdate = await Post.findOne({where: {id: req.body.postId}}).catch(error => {
         console.log('Erreur in postCtrl.notifyCorrection : ' + error);
         res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
     })
+    if(!postToUpdate) {
+        return res.status(404).json({ message: 'post non trouvé', newPost: null})
+    }
+    console.log(postToUpdate.dataValues);
+    console.log(`req.auth.userId : ${typeof req.auth.userId}, ${req.auth.userId}`);
+    console.log(`postToUpdate.userId : ${typeof postToUpdate.dataValues.UserId} ${postToUpdate.dataValues.UserId}`);
+    if( req.auth.userId !== postToUpdate.dataValues.UserId ) {
+        return res.status(401).json({message: 'requête non autorisée', newPost: null});
+    }
+    await Post.update({corrected: true}, {where: {id: req.body.postId}}).catch(error => {
+        console.log('Error in posts.js/notifyCorrection : ' + error);
+        res.status(500).json({ message: 'Une erreur est survenue, veuillez réessayer', newPost: null});
+    })
+    console.log('Post mis à jour');
+    const post = await Post.findOne({
+        where: { id: req.body.postId},
+        include: defaultInclude
+    }).catch(error => {
+        console.log('Erreur dans postCtrl.notifyCorrection :');
+        console.log(error);
+        res.status(500).json({ message: 'Une erreur est survenue, veuiller rafraîchir la page., newPost: null'});
+    })
+    post.reported = JSON.parse(post.reported);
+    res.status(201).json({ message: "Notification de correction reçue.", newPost: post});
 }
 
 //unsets the given post ( req.body.postId ) as 'corrected' by the author
@@ -329,7 +332,7 @@ exports.avoidCorrection = (req, res) => {
         if(!post) {
             return res.status(404).json({ message: 'post non trouvé', newPost: null})
         }
-        if( req.auth.userId !== post.userId ) {
+        if( req.auth.userId !== post.UserId ) {
             return res.status(401).json({message: 'requête non autorisée', newPost: null});
         }
         Post.update({corrected: false}, {where: {id: req.body.postId}}).then(() => {

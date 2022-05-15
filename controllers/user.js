@@ -172,11 +172,30 @@ exports.deleteUser = (req, res) => {
     if(!req.params.id || parseInt(req.params.id) !== req.auth.userId) {
         return res.status(401).json({message : 'requête non autorisée'});
     }
-    User.findOne({where: {id: req.auth.userId}}).then(user => {
-        if(!user)
+    User.findOne({
+        where: {id: req.auth.userId},
+        include: [{model: Post, attributes: ['imageUrl']}]
+    })
+    .then(user => {
+        if(!user) {
             return res.status(404).json({message: 'Utilisateur non trouvé'});
+        }
+        //delete all post images
+        for(let post of user.Posts) {
+            if(post.imageUrl) {
+                fs.unlink(`images/postImage/${post.imageUrl}`, () => {
+                    console.log(`image ${post.imageUrl} supprimée`)
+                });
+            }
+        }
+        //delete avatar image
+        if(user.avatarUrl && user.avatarUrl !== 'defaultavatar.jpg') {
+            fs.unlink(`images/avatars/${user.avatarUrl}`, () => {
+                console.log(`avatar ${user.avatarUrl} supprimé`);
+            })
+        }
+        //removes user from database
         User.destroy({where: {id: req.auth.userId}}).then(() => {
-            //Post.destroy({where: {UserId: req.auth.userId}});
             res.status(201).json({message: 'Compte supprimé', newUser: null});
         }).catch(error => {
             console.log('Error in userCtrl.deleteUser : '+ error);
